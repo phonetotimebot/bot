@@ -20,37 +20,6 @@ def start_message(update, context):
     bot.send_message(user_id, 'Hi, send me one or more phone numbers (separated by newlines) to get the local time.')
 
 
-def process_number(npt, multiple=False):
-    unknown = ' — ???'
-    if [x for x in npt if x not in f'+()- {string.digits}']:
-        return npt + unknown if multiple else ''
-    try:
-        npt = npt.replace("'", '').replace('"', '')
-        npt = '+' + npt if npt[0] != '+' else npt
-        num = phonenumbers.parse(npt)
-        tz = timezone.time_zones_for_number(num)
-        now = datetime.now()
-        dt = [[now.astimezone(pytz.timezone(x)).replace(tzinfo=None), x] for x in tz]
-        srt = sorted(dt, key=lambda x: x[0])
-        time = [datetime.strftime(x[0], '%I:%M %p, %d.%m.%Y') for x in srt]
-        res = list(set([time[0], time[-1]]))
-        geo = ", ".join([x[1] for x in srt])
-        if multiple:
-            txt = npt + ' — '
-        else:
-            txt = ''
-        if len(res) == 2:
-            out = f'{txt}{res[0]} - {res[1]} ({geo})'
-        else:
-            out = f'{txt}{res[0]} ({geo})'
-    except Exception:
-        if multiple:
-            out = npt + unknown
-        else:
-            out = ''
-    return out
-
-
 def check_number(data):
     check = []
     for x in data:
@@ -74,6 +43,31 @@ def check_number(data):
                     except Exception:
                         pass
     return check
+
+
+def process_number(npt, multiple=False):
+    unknown = ' — ???'
+    if [x for x in npt if x not in f'+()- {string.digits}']:
+        return npt + unknown if multiple else ''
+    try:
+        npt = npt.replace("'", '').replace('"', '')
+        npt = '+' + npt if npt[0] != '+' else npt
+        num = phonenumbers.parse(npt)
+        tz = timezone.time_zones_for_number(num)
+        now = datetime.now()
+        dt = [[now.astimezone(pytz.timezone(x)).replace(tzinfo=None), x] for x in tz]
+        srt = sorted(dt, key=lambda x: x[0])
+        time = [datetime.strftime(x[0], '%I:%M %p, %d.%m.%Y') for x in srt]
+        txt = f'{npt} — ' if multiple else ''
+        res = f'{time[0]} - {time[-1]}' if len(time) > 1 and time[0] != time[-1] else time[0]
+        geo = f' ({", ".join([x[1] for x in srt])})'
+        out = txt + res + geo
+    except Exception:
+        if multiple:
+            out = npt + unknown
+        else:
+            out = ''
+    return out
 
 
 def handle_message(update, context):
