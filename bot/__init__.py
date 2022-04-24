@@ -1,6 +1,6 @@
+import phonenumbers
 import string
 import pytz
-import phonenumbers
 
 from queue import Queue
 from threading import Thread
@@ -20,7 +20,7 @@ def start_message(update, context):
     bot.send_message(user_id, 'Hi, send me one or more phone numbers (separated by newlines) to get the local time.')
 
 
-def check_number(data):
+def check_phone(data):
     check = []
     for x in data:
         if isinstance(x, list):
@@ -30,7 +30,8 @@ def check_number(data):
                         try:
                             y = y.replace("'", '').replace('"', '')
                             y = '+' + y if y[0] != '+' else y
-                            check.append(phonenumbers.parse(y))
+                            number = phonenumbers.parse(y)
+                            check.append(number)
                         except Exception:
                             pass
         else:
@@ -39,34 +40,35 @@ def check_number(data):
                     try:
                         x = x.replace("'", '').replace('"', '')
                         x = '+' + x if x[0] != '+' else x
-                        check.append(phonenumbers.parse(x))
+                        number = phonenumbers.parse(x)
+                        check.append(number)
                     except Exception:
                         pass
     return check
 
 
-def process_number(npt, multiple=False):
-    unknown = ' — ???'
-    if [x for x in npt if x not in f'+()- {string.digits}']:
-        return npt + unknown if multiple else ''
-    try:
-        npt = npt.replace("'", '').replace('"', '')
-        npt = '+' + npt if npt[0] != '+' else npt
-        num = phonenumbers.parse(npt)
-        tz = timezone.time_zones_for_number(num)
-        now = datetime.now()
-        dt = [[now.astimezone(pytz.timezone(x)).replace(tzinfo=None), x] for x in tz]
-        srt = sorted(dt, key=lambda x: x[0])
-        time = [datetime.strftime(x[0], '%I:%M %p, %d.%m.%Y') for x in srt]
-        txt = f'{npt} — ' if multiple else ''
-        res = f'{time[0]} - {time[-1]}' if len(time) > 1 and time[0] != time[-1] else time[0]
-        geo = f' ({", ".join([x[1] for x in srt])})'
-        out = txt + res + geo
-    except Exception:
-        if multiple:
-            out = npt + unknown
-        else:
-            out = ''
+def process_phone(npt, multiple=False):
+    txt = f'{npt} — ' if multiple else ''
+    if not [x for x in npt if x not in f'+()- {string.digits}']:
+        try:
+            npt = npt.replace("'", '').replace('"', '')
+            npt = '+' + npt if npt[0] != '+' else npt
+            number = phonenumbers.parse(npt)
+            if phonenumbers.is_valid_number(number):
+                tz = timezone.time_zones_for_number(number)
+                now = datetime.now()
+                dt = [[now.astimezone(pytz.timezone(x)).replace(tzinfo=None), x] for x in tz]
+                srt = sorted(dt, key=lambda x: x[0])
+                time = [datetime.strftime(x[0], '%I:%M %p, %d.%m.%Y') for x in srt]
+                res = f'{time[0]} - {time[-1]}' if len(time) > 1 and time[0] != time[-1] else time[0]
+                geo = f' ({", ".join([x[1] for x in srt])})'
+                out = f'{txt}{res}{geo}'
+            else:
+                out = txt + 'Invalid phone number.'
+        except Exception:
+            out = txt + 'An error occured.'
+    else:
+        out = txt + 'No phone number.'
     return out
 
 
@@ -78,9 +80,9 @@ def handle_message(update, context):
     txt = message.text
     try:
         data = [x.split(', ') if ', ' in x else x for x in txt.split('\n')]
-        if check_number(data):
-            data = ['\n' + '\n'.join([process_number(x, True) for x in e if x]) + '\n'
-                    if isinstance(e, list) else process_number(e, len(data) > 1)
+        if check_phone(data):
+            data = ['\n' + '\n'.join([process_phone(x, True) for x in e if x]) + '\n'
+                    if isinstance(e, list) else process_phone(e, len(data) > 1)
                     for e in data if e]
             data = '\n'.join(data)
             start, end = 0, 0
@@ -103,7 +105,7 @@ def handle_message(update, context):
             else:
                 bot.send_message(user_id, res)
         else:
-            bot.send_message(user_id, 'No valid number.')
+            bot.send_message(user_id, 'No phone number.')
     except Exception:
         bot.send_message(user_id, 'An error occured.')
 
