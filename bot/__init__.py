@@ -31,7 +31,7 @@ def process_number(npt, multiple=False):
         tz = timezone.time_zones_for_number(num)
         now = datetime.now()
         dt = [[now.astimezone(pytz.timezone(x)).replace(tzinfo=None), x] for x in tz]
-        srt = sorted(dt, key = lambda x: x[0])
+        srt = sorted(dt, key=lambda x: x[0])
         time = [datetime.strftime(x[0], '%I:%M %p, %d.%m.%Y') for x in srt]
         res = list(set([time[0], time[-1]]))
         geo = ", ".join([x[1] for x in srt])
@@ -56,14 +56,31 @@ def handle_message(update, context):
     user = update.effective_user
     user_id = user['id']
     message = update.effective_message
-    npt = message.text
-    data = npt.split('\n')
-    res = '\n'.join([process_number(line, len(data) > 1) for line in data])
-    if res:
-        bot.send_message(user_id, res)
-    else:
-        bot.send_message(user_id, 'An error occured.')
-        return None
+    txt = message.text
+    try:
+        data = [x.split(', ') if ', ' in x else x for x in txt.split('\n')]
+        data = ['\n' + '\n'.join([process_number(x, True) for x in e]) + '\n'
+                if isinstance(e, list) else process_number(e, len(data) > 1) for e in data]
+        data = '\n'.join(data)
+        start, end = 0, 0
+        for x in data:
+            if x == '\n':
+                start += 1
+            else:
+                break
+        for x in data[::-1]:
+            if x == '\n':
+                end += 1
+            else:
+                break
+        data = data[start:] if start else data
+        data = data[:-end] if end else data
+        if len(data) <= 4096:
+            bot.send_message(user_id, data)
+        else:
+            bot.send_message(user_id, 'The message is too long.')
+    except Exception as err:
+        bot.send_message(user_id, err)
 
 
 bot = Bot(TOKEN)
