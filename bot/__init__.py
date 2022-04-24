@@ -25,7 +25,7 @@ def process_number(npt, multiple=False):
     if [x for x in npt if x not in f'+()- {string.digits}']:
         return npt + unknown if multiple else ''
     try:
-        npt = npt.replace('\n', '').replace("'", '').replace('"', '')
+        npt = npt.replace("'", '').replace('"', '')
         npt = '+' + npt if npt[0] != '+' else npt
         num = phonenumbers.parse(npt)
         tz = timezone.time_zones_for_number(num)
@@ -51,6 +51,31 @@ def process_number(npt, multiple=False):
     return out
 
 
+def check_number(data):
+    check = []
+    for x in data:
+        if isinstance(x, list):
+            for y in x:
+                if y:
+                    if not [e for e in y if e not in f'+()- {string.digits}']:
+                        try:
+                            y = y.replace("'", '').replace('"', '')
+                            y = '+' + y if y[0] != '+' else y
+                            check.append(phonenumbers.parse(y))
+                        except Exception:
+                            pass
+        else:
+            if x:
+                if not [e for e in x if e not in f'+()- {string.digits}']:
+                    try:
+                        x = x.replace("'", '').replace('"', '')
+                        x = '+' + x if x[0] != '+' else x
+                        check.append(phonenumbers.parse(x))
+                    except Exception:
+                        pass
+    return check
+
+
 def handle_message(update, context):
     bot = context.bot
     user = update.effective_user
@@ -59,28 +84,34 @@ def handle_message(update, context):
     txt = message.text
     try:
         data = [x.split(', ') if ', ' in x else x for x in txt.split('\n')]
-        data = ['\n' + '\n'.join([process_number(x, True) for x in e]) + '\n'
-                if isinstance(e, list) else process_number(e, len(data) > 1) for e in data]
-        data = '\n'.join(data)
-        start, end = 0, 0
-        for x in data:
-            if x == '\n':
-                start += 1
+        if check_number(data):
+            data = ['\n' + '\n'.join([process_number(x, True) for x in e if x]) + '\n'
+                    if isinstance(e, list) else process_number(e, len(data) > 1)
+                    for e in data if e]
+            data = '\n'.join(data)
+            start, end = 0, 0
+            for x in data:
+                if x == '\n':
+                    start += 1
+                else:
+                    break
+            for x in data[::-1]:
+                if x == '\n':
+                    end += 1
+                else:
+                    break
+            res = data[start:] if start else data
+            res = data[:-end] if end else data
+            if not res:
+                bot.send_message(user_id, 'An error occured.')
+            elif len(res) > 4096:
+                bot.send_message(user_id, 'The message is too long.')
             else:
-                break
-        for x in data[::-1]:
-            if x == '\n':
-                end += 1
-            else:
-                break
-        data = data[start:] if start else data
-        data = data[:-end] if end else data
-        if len(data) <= 4096:
-            bot.send_message(user_id, data)
+                bot.send_message(user_id, res)
         else:
-            bot.send_message(user_id, 'The message is too long.')
-    except Exception as err:
-        bot.send_message(user_id, err)
+            bot.send_message(user_id, 'No valid number.')
+    except Exception:
+        bot.send_message(user_id, 'An error occured.')
 
 
 bot = Bot(TOKEN)
